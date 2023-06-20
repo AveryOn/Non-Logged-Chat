@@ -32,6 +32,7 @@ const props = defineProps({
     cursor: pointer;
     font-family: sans-serif;
     color: bisque;
+    margin: 3px 0;
 }
 .item-chat:hover{
     background: rgba(50, 61, 61, 0.822);

@@ -46,8 +46,8 @@ onMounted(() => {
     padding: 10px;
     margin: 2px 5px;
     border-radius: 20px;
-    /* background-color: rgb(175, 61, 61);
-    color: rgb(255, 217, 1); */
+    background-color: rgb(125, 173, 194);
+    color: rgb(79, 83, 85);
     font-family: sans-serif;
     font-weight: bolder;
     font-size: 1.1em;
