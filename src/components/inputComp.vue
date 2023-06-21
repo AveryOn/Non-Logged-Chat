@@ -30,6 +30,7 @@ const value = computed({
     outline: rgba(0,0,0,0);
     width: 85%;
     padding: 12px;
+    margin: 2px;
     background-color: rgb(46, 53, 53);
     border: 1px solid rgba(0,0,0,0);
     border-radius: 10px;

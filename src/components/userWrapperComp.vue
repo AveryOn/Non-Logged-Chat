@@ -4,7 +4,14 @@
         class="if-none-chats__user-item" 
         :style="{ backgroundColor: user.color }" 
         v-for="user in users"
-        :key="user.id"></span>
+        :title="user?.username"
+        :key="user.id"
+        @click="$emit('openUserPage', user)"
+        >
+            <p class="user-word">
+                {{ user.username.split('')[0].toUpperCase() }}
+            </p>
+        </span>
         <button class="if-none-chats__btn left" @click="scrollUsersLeft">⇽</button>
         <button class="if-none-chats__btn right" @click="scrollUsersRight">⇾</button>
     </div>
@@ -56,9 +63,16 @@ function scrollUsersLeft(){
 .if-none-chats__user-item{
     min-width: 50px;
     min-height: 50px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     background-color: bisque;
     border-radius: 50%;
     margin: 2px;
+}
+.user-word{
+    font-size: 2em;
+    cursor: pointer;
 }
 .if-none-chats__btn{
     font-size: 1.9em;
