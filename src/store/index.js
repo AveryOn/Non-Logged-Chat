@@ -1,6 +1,7 @@
 import { createStore } from 'vuex'
 import router from '@/router';
 import axios from 'axios';
+import moment from 'moment/moment';
 
 export default createStore({
     state: {
@@ -61,6 +62,28 @@ export default createStore({
                     console.log(err);
                 }
             )
+        },
+
+        // Создание нового Чата ДВУХ ПОЛЬЗОВАТЕЛЕЙ 
+        createChat({ state, commit }, { firstUserID, secondUserID }){
+            const newChat = {
+                id: 1687381045137,
+                firstUserID,
+                secondUserID,
+                createdAt: moment(Date.now()).format('DD.MM.YYYY HH:mm:ss'),
+            }
+            axios.post(state.hostServer + '/chats/create-chat', {
+                ...newChat
+            }, {
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded'
+                }
+            }).then((res) => {
+                console.log(res);
+            }).catch(err => {
+                console.log(err);
+            })
+
         }
 
     },

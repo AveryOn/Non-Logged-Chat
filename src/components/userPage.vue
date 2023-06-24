@@ -15,6 +15,8 @@
 
 <script setup>
 import buttonComp from './buttonComp.vue';
+import { useStore } from 'vuex';
+const store = useStore();
 const props = defineProps({
     show: {
         type: Boolean,
@@ -26,7 +28,7 @@ const props = defineProps({
 }) 
 
 function createChat(){
-    
+    store.dispatch('createChat', { firstUserID: 10, secondUserID: 15 });
 }
 
 </script>

@@ -6,16 +6,11 @@
 import { onBeforeMount } from 'vue';
 import { useRouter } from 'vue-router';
 import { useStore } from 'vuex';
-import { io } from 'socket.io-client';
 const router = useRouter();
 const store = useStore();
 
 onBeforeMount(() => {
-    const socket = io(store.state.hostServer);
-    socket.on("connect_error", (err) => {
-        throw new Error('WebSocket: Не удалось подключиться к серверу!');
-    });
-
+    // store.dispatch('createChat', { firstUserID: 1687383806267, secondUserID: 1687383789283 });
 })
 
 </script>

@@ -111,7 +111,9 @@ function openUserPage(user){
 
 // Вычисление рандомного цвета
 function randColor(){
+    // from 0 To 1000
     const colorValue = (+(Math.random().toFixed(3)) * 1000);
+    // Цветовая модель hsl, меняем первое значение: тон цвета
     return `hsl(${colorValue} 40% 50%)`
 }
 
