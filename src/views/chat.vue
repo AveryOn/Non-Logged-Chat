@@ -1,17 +1,20 @@
 <template>
     <div class="main">
 
+        <myIconComp @click="userActions.disconnectUser"></myIconComp>
+
         <userPage 
         :show="isShowUserPage" 
         :user-data="userCurrentPage"
-        @closeUserPage="isShowUserPage = false"
+        @close-user-page="isShowUserPage = false"
+        @select-chat="selectChat"
         ></userPage>
 
 <!-- CHAT -->
         <div class="chat">
 
             <!-- IF NO SELECT CHAT -->
-            <div class="if-no-select-chat" v-show="!currentChat">
+            <div class="if-no-select-chat" v-show="!selectedChat">
                 <h1 class="if-no-select-chat__text">
                     Select Chat!
                 </h1>
@@ -19,22 +22,22 @@
 
             <!-- CHATS -->
             <span class="panel-chats__open" @click="isShowPanelChats = true"></span>
+
             <div class="panel-chats" v-show="isShowPanelChats">
                 <span class="panel-chats__close" @click="isShowPanelChats = false"></span>
+                
+                <!-- USERS WRAPPER -->
+                <userWrapperComp :users="users" @openUserPage="openUserPage"></userWrapperComp>
 
                 <!-- IF NONE CHATS -->
-                <div class="if-none-chats" v-show="!chats.length">
-
-                    <!-- USERs WRAPPER -->
-                    <userWrapperComp :users="users" @openUserPage="openUserPage"></userWrapperComp>
-
-                    <h2 class="if-none-chats__text" @click="addUser">
-                        Chats not yet!
-                    </h2>
-                </div>
+                <h2 class="if-none-chats__text" v-show="!chats.length">
+                    Chats not yet!
+                </h2>
 
                 <itemChatComp
                 v-for="chat in chats"
+                :title-chat="selectedChat.titleChat"
+                :body-chat="selectedChat.bodyChat"
                 :key="chat.id"
                 >
                 </itemChatComp>
@@ -42,7 +45,18 @@
 
             <!-- MESSAGES -->
             <div class="block-messages">
-                <h1 class="if-none-message" v-show="!messages.length && currentChat">
+
+                <!-- TOPBAR -->
+                <div class="chat__topbar">
+                    <p class="chat__topbar-title">
+                        {{ selectedChat?.titleChat }}
+                    </p>
+                    <p class="chat___topbar-status">
+                        {{ selectedChat?.userStatus }}
+                    </p>
+                </div>
+
+                <h1 class="if-none-message" v-show="!messages.length && selectedChat">
                     Messages not yet!
                 </h1>                
                 <itemMessageComp
@@ -56,8 +70,8 @@
 
             <!-- INPUT -->
             <form class="panel-input" @submit.prevent>
-                <inputComp :disabled="!currentChat" v-model="messageText" ></inputComp>
-                <buttonComp :disabled="!currentChat" @click="sendMessage">Send</buttonComp>
+                <inputComp :disabled="!selectedChat" v-model="messageText" ></inputComp>
+                <buttonComp :disabled="!selectedChat" @click="sendMessage">Send</buttonComp>
             </form>
         </div>
 
@@ -81,11 +95,13 @@
 <script setup>
 import inputComp from '@/components/inputComp.vue';
 import buttonComp from '@/components/buttonComp.vue';
+import myIconComp from '@/components/myIconComp.vue';
 import itemChatComp from '@/components/itemChatComp.vue';
 import itemMessageComp from '@/components/itemMessageComp.vue';
 import userWrapperComp from '@/components/userWrapperComp.vue';
 import userPage from '@/components/userPage.vue';
 import logComp from '@/components/logComp.vue';
+import { userActions } from '@/socket/socket-config'
 import moment from 'moment';
 import { ref, reactive, watch, onMounted } from 'vue';
 import { useStore } from 'vuex';
@@ -95,7 +111,7 @@ const isShowPanelChats = ref(false);
 const isShowUserPage = ref(false);
 
 const messageText = ref('');
-const currentChat = ref(null);
+const selectedChat = ref(null);
 const userCurrentPage = reactive({username: '', friends: [], color: ''});
 const messages = ref([]);
 const users = ref([]);
@@ -119,15 +135,25 @@ function randColor(){
 
 function addUser(user){
     const color = randColor();
-    const newUser = {...user};   
-    newUser.color = color;
-    users.value.push(newUser);
+    const me = JSON.parse(localStorage.getItem('auth'));
+    const newUser = {...user};  
+    if(newUser?.id === me.id){
+        localStorage.setItem('my-color', color);
+    }else{
+        newUser.color = color;
+        users.value.push(newUser);
+    }
+}
+
+function selectChat(chat){
+    selectedChat.value = chat;
+    isShowPanelChats.value = false;
+    isShowUserPage.value = false;
 }
 
 function addLog(typeLog, message){
     store.commit('addLog', { typeLog, message })
 }
-
 function sendMessage(){
     const newMessage = {
         id: Date.now(),
@@ -148,6 +174,7 @@ function sendMessage(){
 }
 
 onMounted(() => {
+    userActions.connectUser();
     store.dispatch('getAllUsers', (res) => {
         for (const user of res) {
             addUser(user);
@@ -191,6 +218,7 @@ onMounted(() => {
     border: 1px solid rgb(54, 54, 54);
     overflow: hidden;
 }
+
 .if-no-select-chat{
     position: absolute;
     display: flex;
@@ -225,6 +253,7 @@ onMounted(() => {
     backdrop-filter: blur(4px);
     z-index: 100;
 }
+
 .panel-chats__close{
     position: absolute;
     right: -25px;
@@ -256,15 +285,8 @@ onMounted(() => {
 .panel-chats__open:hover{
     background-color: rgba(86, 118, 167, 0.3);
 }
-.if-none-chats{
-    position: relative;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    align-self: center;
-    margin: auto;
-}
 .if-none-chats__text{
+    margin: auto;
     font-size: 2.5em;
     color: bisque;
 }
@@ -280,6 +302,27 @@ onMounted(() => {
     margin: 10px auto 10px auto;
     overflow-y: auto;
     overflow-x: hidden;
+}
+.chat__topbar{
+    width: 100%;
+    height: max-content;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 5px 20px;
+    position: absolute;
+    background: rgba(0,0,0, .5);
+    backdrop-filter: blur(5px);
+    border-top-left-radius: 10px;
+    border-top-right-radius: 10px;
+    z-index: 50;
+}
+.chat__topbar-title{
+    font-family: sans-serif;
+    margin: 6px;
+}
+.chat___topbar-status{
+
 }
 .if-none-message{
     position: relative;

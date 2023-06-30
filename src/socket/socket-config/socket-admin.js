@@ -10,7 +10,7 @@ const adminSocket = io(URL, {
 
 // Обработчик подключения к серверу
 adminSocket.on('connect', () => {
-    console.log('success connection!');
+    console.log('adminSocket success connection!');
 })
 
 // Обработчик ошибки соединения
@@ -18,4 +18,6 @@ adminSocket.on('connect_error', (err) => {
     console.log(err);
 })
 
-export default adminSocket;
+export {
+    adminSocket
+};

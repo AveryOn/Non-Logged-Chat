@@ -6,8 +6,8 @@ import moment from 'moment/moment';
 export default createStore({
     state: {
         hostServer: 'http://localhost:3000',
-        myID: 321,
-        logs: []
+        logs: [],
+        activeUsers: [],
     },
     getters: {
     },
@@ -16,6 +16,9 @@ export default createStore({
             console.log(typeLog, message);
             const newLog = { id: Date.now(), typeLog, message }
             state.logs.push(newLog);
+        },
+        updateActiveUsers(state, userList){
+            state.activeUsers = userList;
         }
     },
     actions: {
@@ -51,6 +54,7 @@ export default createStore({
                             for (const error of data?.target) {
                                 console.log(new Error(`Причина ошибки: ${error.validatorKey}, Цель: ${error.path}`));
                             }
+                            return;
                         } else {
                             console.log(new Error(`Причина ошибки: ${data?.target.validatorKey}, Цель: ${data?.target.path}`));
                         }
@@ -65,7 +69,7 @@ export default createStore({
         },
 
         // Создание нового Чата ДВУХ ПОЛЬЗОВАТЕЛЕЙ 
-        createChat({ state, commit }, { firstUserID, secondUserID }){
+        createChat({ state }, { firstUserID, secondUserID }){
             const newChat = {
                 id: 1687381045137,
                 firstUserID,

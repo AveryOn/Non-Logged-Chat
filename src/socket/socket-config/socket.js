@@ -9,14 +9,6 @@ const socket = io(URL, {
     autoConnect: false
 });
 
-// Обработчик подключения к серверу
-socket.on('connect', () => {
-    console.log('success connection!');
-})
-
-// Обработчик ошибки соединения
-socket.on('connect_error', (err) => {
-    console.log(err);
-})
-
-export default socket;
+export {
+    socket
+};

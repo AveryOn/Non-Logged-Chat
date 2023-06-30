@@ -69,6 +69,7 @@ const messageStyle = computed(() => {
     border-radius: 10px;
     padding: 5px 15px;
     cursor: default;
+    z-index: 5;
 }
 .message__body{
     margin-bottom: 12px;
