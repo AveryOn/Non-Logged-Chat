@@ -17,14 +17,14 @@ export default createStore({
             const newLog = { id: Date.now(), typeLog, message }
             state.logs.push(newLog);
         },
-        updateActiveUsers(state, userList){
+        updateActiveUsers(state, userList) {
             state.activeUsers = userList;
         }
     },
     actions: {
 
         // Получение всех пользователей
-        getAllUsers({ state, commit }, callback) {
+        getAllUsers({ state }, callback) {
             axios.get(state.hostServer + '/users')
                 .then((response) => {
                     return callback(response.data);
@@ -33,8 +33,24 @@ export default createStore({
                 })
         },
 
+        // Получение чатов пользователя
+        async getUserChats({ state }, { userID }) {
+            try {
+                const response = await axios.get(state.hostServer + `/chats/get-chats/${userID}`, {
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded'
+                    }
+                })
+                localStorage.setItem('my-chats', JSON.stringify(response.data));
+                return response.data;
+            } catch (err) {
+                console.log(err);
+            }
+
+        },
+
         // Создание одного пользователя
-        createUser({ state, commit }, { username, email, friends, password }) {
+        createUser({ state }, { username, email, friends, password }) {
             axios.post(state.hostServer + '/users/create-user', {
                 id: Date.now(),
                 username,
@@ -47,21 +63,10 @@ export default createStore({
                 }
             }).then(
                 (response) => {
-                    console.log(response.data);
-                    const data = response.data;
-                    if (data?.status === 'Error') {
-                        if (data?.target.length) {
-                            for (const error of data?.target) {
-                                console.log(new Error(`Причина ошибки: ${error.validatorKey}, Цель: ${error.path}`));
-                            }
-                            return;
-                        } else {
-                            console.log(new Error(`Причина ошибки: ${data?.target.validatorKey}, Цель: ${data?.target.path}`));
-                        }
-                    } else {
-                        localStorage.setItem('auth', JSON.stringify(data));
-                        router.push({ name: 'chat' });
-                    }
+                    const data = response.data
+                    data.id = (+data.id);
+                    localStorage.setItem('auth', JSON.stringify(data));
+                    router.push({ name: 'chat' });
                 }, (err) => {
                     console.log(err);
                 }
@@ -69,9 +74,9 @@ export default createStore({
         },
 
         // Создание нового Чата ДВУХ ПОЛЬЗОВАТЕЛЕЙ 
-        createChat({ state }, { firstUserID, secondUserID }){
+        createChat({ state }, { firstUserID, secondUserID }) {
             const newChat = {
-                id: 1687381045137,
+                id: Date.now(),
                 firstUserID,
                 secondUserID,
                 createdAt: moment(Date.now()).format('DD.MM.YYYY HH:mm:ss'),
@@ -87,8 +92,45 @@ export default createStore({
             }).catch(err => {
                 console.log(err);
             })
+        },
 
-        }
+        // Получение массива сообщений определенного чата
+        async getMessages({ state }, { chatID, limit }) {
+            try {
+                const response = await axios.get(state.hostServer + `/message/${chatID}/${limit}`, {
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded'
+                    }
+                })
+                return response.data;
+            } catch (err) {
+                console.log(err);
+            }
+        },
+
+        // // Создание сообщения
+        // async createMessage({ state }, { chatID, text, fromUserID, toUserID }) {
+        //     const newChat = {
+        //         messageID: Date.now(),
+        //         chatID,
+        //         text,
+        //         fromUserID,
+        //         toUserID,
+        //         createdAt: moment(Date.now()).format('DD.MM.YYYY HH:mm:ss'),
+        //     }
+        //     try {
+        //         const response = await axios.post(state.hostServer + `/message/create/`, {
+        //             ...newChat
+        //         }, {
+        //             headers: {
+        //                 'Content-Type': 'application/x-www-form-urlencoded'
+        //             }
+        //         })
+        //         return response.data;
+        //     } catch (err) {
+        //         console.log(err);
+        //     }
+        // }
 
     },
     modules: {

@@ -1,11 +1,12 @@
 <template>
-    <div class="user-page" v-show="props.show" @click="$emit('closeUserPage')">
-        
+    <div class="user-page" v-show="props.show" @click="$emit('closeUserPage', false)">
+
         <div class="user-page__data-block" @click.stop>
 
-            <p class="active-user-text">{{ (isUserActive)? 'online' : 'offline' }}</p>
+            <p class="active-user-text">{{ (isUserActive) ? 'online' : 'offline' }}</p>
 
-            <div class="user-icon" :style="{'backgroundColor': props.userData.color}">
+            <!-- ИКОНКА -->
+            <div class="user-icon" :style="{ 'backgroundColor': props.userData.color }">
                 <span class="user-page__indicator" v-show="isUserActive"></span>
                 {{ (props.userData.username)?.split('')[0]?.toUpperCase() }}
             </div>
@@ -14,15 +15,12 @@
             <p class="user-option">Friends: {{ props.userData?.friends.length }}</p>
 
             <buttonComp class="user-btn">Add as a friend</buttonComp>
-            <buttonComp 
-            class="user-btn" 
-            @click="$emit('selectChat', { titleChat: props.userData.username, bodyChat: ' ' })"
-            >
+            <buttonComp class="user-btn" @click="selectChat">
                 Write message
             </buttonComp>
 
         </div>
-    
+
     </div>
 </template>
 
@@ -38,25 +36,43 @@ const props = defineProps({
     },
     userData: {
         type: Object,
+    },
+    chats: {
+        type: Array,
+        default: () => [],
     }
-}) 
+});
+const emit = defineEmits(['selectChat', 'closeUserPage']);
+
+function selectChat() {
+    for (const chat of props.chats) {
+        if (+chat.userID === +props.userData.id) {
+            return emit('selectChat', {
+                chatID: +chat.chatID,
+                username: props.userData.username,
+                userID: +props.userData.id
+            });
+        }
+    }
+    emit('selectChat', {
+        chatID: Date.now(),
+        username: props.userData.username,
+        userID: +props.userData.id
+    });
+}
 
 const isUserActive = computed(() => {
-    if(store.state.activeUsers.includes(props.userData.id)){
+    if (store.state.activeUsers.includes(+props.userData.id)) {
         return true;
-    }else{
+    } else {
         return false;
     }
 })
 
-function createChat(){
-
-}
-
 </script>
 
 <style scoped>
-.user-page{
+.user-page {
     position: fixed;
     top: 0;
     right: 0;
@@ -65,10 +81,11 @@ function createChat(){
     display: flex;
     align-items: center;
     justify-content: center;
-    background-color: rgba(0,0,0, .5);
+    background-color: rgba(0, 0, 0, .5);
     z-index: 10000;
 }
-.user-page__data-block{
+
+.user-page__data-block {
     position: relative;
     display: flex;
     flex-direction: column;
@@ -77,17 +94,19 @@ function createChat(){
     height: 60%;
     background-color: rgb(61, 78, 77);
     border-radius: 10px;
-    box-shadow: 10px 5px 30px 2px rgba(0,0,0, .5);
+    box-shadow: 10px 5px 30px 2px rgba(0, 0, 0, .5);
     padding: 15px 0;
 }
-.active-user-text{
+
+.active-user-text {
     position: absolute;
     right: 10px;
     top: 5px;
     font-family: sans-serif;
     cursor: default;
 }
-.user-icon{
+
+.user-icon {
     position: relative;
     display: flex;
     align-items: center;
@@ -98,8 +117,10 @@ function createChat(){
     background-color: bisque;
     font-size: 5em;
     font-family: 'Gill Sans', 'Gill Sans MT', Calibri, 'Trebuchet MS', sans-serif;
+    cursor: default;
 }
-.user-page__indicator{
+
+.user-page__indicator {
     position: absolute;
     left: 15px;
     top: 15px;
@@ -109,12 +130,14 @@ function createChat(){
     border: 1px solid rgb(47, 83, 47);
     border-radius: 50%;
 }
-.user-option{
+
+.user-option {
     font-size: 1.4em;
     margin: 20px 10px 10px 10px;
     font-family: sans-serif;
 }
-.user-btn{
+
+.user-btn {
     /* position: relative;
     bottom: 20px; */
     margin: 5px;

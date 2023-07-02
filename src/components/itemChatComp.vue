@@ -1,21 +1,28 @@
 <template>
-    <div class="item-chat">
-        <p class="item-chat__title">{{ titleChat }}</p>
-        <p class="item-chat__body">{{ bodyChat }}</p>
+    <div 
+    class="item-chat" 
+    :title="`chatID: ${props.chatData.chatID}, userID: ${props.chatData.userID}`"
+    @click="selectChat"
+    >
+        <p class="item-chat__title">{{ props.chatData?.username }}</p>
+        <p class="item-chat__body"></p>
     </div>
 </template>
 
 <script setup>
 const props = defineProps({
-    titleChat: {
-        type: String,
-        default: 'undefined'
-    },
-    bodyChat: {
-        type: String,
-        default: 'undefined'
+    chatData: {
+        type: Object,
     },
 })
+const emit = defineEmits(['selectChat']);
+function selectChat(){
+    emit('selectChat', { 
+        chatID: +props.chatData.chatID, 
+        username: props.chatData.username, 
+        userID: +props.chatData.userID ,
+    })
+}
 
 </script>
 

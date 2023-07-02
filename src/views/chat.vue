@@ -6,7 +6,8 @@
         <userPage 
         :show="isShowUserPage" 
         :user-data="userCurrentPage"
-        @close-user-page="isShowUserPage = false"
+        :chats="chats"
+        @close-user-page="(boolean) => isShowUserPage = boolean"
         @select-chat="selectChat"
         ></userPage>
 
@@ -14,7 +15,7 @@
         <div class="chat">
 
             <!-- IF NO SELECT CHAT -->
-            <div class="if-no-select-chat" v-show="!selectedChat">
+            <div class="if-no-select-chat" v-show="!selectedChat.chatID">
                 <h1 class="if-no-select-chat__text">
                     Select Chat!
                 </h1>
@@ -34,32 +35,37 @@
                     Chats not yet!
                 </h2>
 
+                <!-- ITEMS CHAT -->
                 <itemChatComp
                 v-for="chat in chats"
-                :title-chat="selectedChat.titleChat"
-                :body-chat="selectedChat.bodyChat"
+                :chat-data="chat"
                 :key="chat.id"
+                @select-chat="selectChat"
                 >
                 </itemChatComp>
             </div>
 
-            <!-- MESSAGES -->
+            <!-- TOPBAR -->
+            <div class="chat__topbar" v-show="selectedChat.chatID">
+                <p class="chat__topbar-title">
+                    {{ selectedChat?.username }}
+                </p>
+                <p class="chat___topbar-status">
+                    {{ (store.state.activeUsers.includes(selectedChat?.userID))? 'online' : 'offline' }}
+                </p>
+            </div>
+            <!-- BLOCK MESSAGES -->
             <div class="block-messages">
+                <!-- триггер блок для подгрузки сообщений -->
+                <div class="trigger-messages" v-show="isShowTriggerMessages"></div>
 
-                <!-- TOPBAR -->
-                <div class="chat__topbar">
-                    <p class="chat__topbar-title">
-                        {{ selectedChat?.titleChat }}
-                    </p>
-                    <p class="chat___topbar-status">
-                        {{ selectedChat?.userStatus }}
-                    </p>
-                </div>
-
-                <h1 class="if-none-message" v-show="!messages.length && selectedChat">
+                <!-- NOT YET MESSAGES -->
+                <h1 class="if-none-message" v-show="!messages.length && selectedChat.chatID">
                     Messages not yet!
                 </h1>                
                 <itemMessageComp
+                @mount-message="mountMessage"
+                @unmount-message="unmountMessage"
                 v-for="message in messages"
                 :message-data="message"
                 :key="message.id"
@@ -70,8 +76,8 @@
 
             <!-- INPUT -->
             <form class="panel-input" @submit.prevent>
-                <inputComp :disabled="!selectedChat" v-model="messageText" ></inputComp>
-                <buttonComp :disabled="!selectedChat" @click="sendMessage">Send</buttonComp>
+                <inputComp :disabled="!selectedChat.chatID" v-model="messageText" ></inputComp>
+                <buttonComp :disabled="!selectedChat.chatID" @click="sendMessage">Send</buttonComp>
             </form>
         </div>
 
@@ -101,21 +107,26 @@ import itemMessageComp from '@/components/itemMessageComp.vue';
 import userWrapperComp from '@/components/userWrapperComp.vue';
 import userPage from '@/components/userPage.vue';
 import logComp from '@/components/logComp.vue';
-import { userActions } from '@/socket/socket-config'
-import moment from 'moment';
-import { ref, reactive, watch, onMounted } from 'vue';
+import { userActions, socket } from '@/socket/socket-config'
+import { ref, reactive, watch, onMounted, computed, nextTick } from 'vue';
 import { useStore } from 'vuex';
 const store = useStore();
 
 const isShowPanelChats = ref(false);
 const isShowUserPage = ref(false);
+const isShowTriggerMessages = ref(false);
 
 const messageText = ref('');
-const selectedChat = ref(null);
+const selectedChat = ref({ chatID: null, username: null, userID: null });
 const userCurrentPage = reactive({username: '', friends: [], color: ''});
 const messages = ref([]);
 const users = ref([]);
 const chats = ref([]);
+
+// ЦВЕТНОЙ ЛОГ
+function logger(msg, color) {
+    console.log("%c" + msg, "color:" + color + ";font-weight:bold;");
+}
 
 function openUserPage(user){
     userCurrentPage.id = user.id;
@@ -133,11 +144,12 @@ function randColor(){
     return `hsl(${colorValue} 40% 50%)`
 }
 
+// 
 function addUser(user){
     const color = randColor();
     const me = JSON.parse(localStorage.getItem('auth'));
     const newUser = {...user};  
-    if(newUser?.id === me.id){
+    if(newUser?.id === (+me.id)){
         localStorage.setItem('my-color', color);
     }else{
         newUser.color = color;
@@ -146,51 +158,163 @@ function addUser(user){
 }
 
 function selectChat(chat){
+    store.dispatch('getMessages', { chatID: chat.chatID, limit: 15 })
+        .then(response => {
+            messages.value = response.messages;
+            const blockMessages = document.querySelector('.block-messages');
+            // setTimeout ставит выполнение скролла для блока сообщений в цикл событий
+            // Нужно для позиции скролла относительно самых новых сообщений
+            setTimeout(() => {
+                blockMessages.scroll({
+                    top: blockMessages.scrollHeight,
+                    behavior: "smooth",
+                });
+                isShowTriggerMessages.value = true;
+            }, 0)
+            messageText.value = '';
+        })
     selectedChat.value = chat;
     isShowPanelChats.value = false;
     isShowUserPage.value = false;
+}
+
+// Lazy-loading сообщений по 15шт по достижению скроллом триггерного блока
+async function observeTriggerMessage(entries){
+    const blockMessages = document.querySelector('.block-messages');
+    const beforeScroll = blockMessages.scrollHeight;
+    if(entries[0].isIntersecting){
+        const response = await store.dispatch('getMessages', { 
+            chatID: selectedChat.value.chatID, 
+            limit: (messages.value.length + 15) 
+        })
+        messages.value = response.messages;
+        if(response.done){
+            // с сервера приходит флаг done Указывающий, что выгружены все сообщения.
+            // В этом случае отключаем триггерный блок, чтобы не инициировать лишние запросы к БД
+            isShowTriggerMessages.value = false;
+        }
+        // setTimeout ставит выполнение скролла для блока сообщений в цикл событий
+        // Нужно для позиции иммитации, того, что новые сообщения подгружены выше
+        setTimeout(() => {
+            const afterScroll = blockMessages.scrollHeight;
+            blockMessages.scroll({
+                top: afterScroll - beforeScroll,
+                behavior: "smooth",
+            });
+        }, 0)
+    }
 }
 
 function addLog(typeLog, message){
     store.commit('addLog', { typeLog, message })
 }
 function sendMessage(){
-    const newMessage = {
-        id: Date.now(),
+    userActions.createMessage({ 
+        chatID: selectedChat.value?.chatID,
         text: messageText.value,
-        fromUserID: 321,
-        toUserID: 123,
-        createdAt: moment(Date.now()).format('HH:mm'),
-    }
-    messages.value.push(newMessage);
-    const blockMessages = document.querySelector('.block-messages');
-    setTimeout(() => {
-        blockMessages.scroll({
-            top: blockMessages.scrollHeight,
-            behavior: "smooth",
-        });
-    }, 10)
-    messageText.value = '';
+        fromUserID: JSON.parse(localStorage.getItem('auth')).id,
+        toUserID: selectedChat.value?.userID,
+    })
+}
+
+const mountedMessages = ref([]);
+function mountMessage(messageObj){
+    mountedMessages.value.push(messageObj);
+}
+
+function unmountMessage(messageObj){
+    mountedMessages.value.splice(mountedMessages.value.indexOf(messageObj), 1);
 }
 
 onMounted(() => {
+    store.dispatch('getUserChats', {userID: JSON.parse(localStorage.getItem('auth')).id})
+        .then((data) => {
+            chats.value = data;
+        })
     userActions.connectUser();
-    store.dispatch('getAllUsers', (res) => {
-        for (const user of res) {
-            addUser(user);
+
+    // Отслеживание прокрутки блока сообщений для Lazy-loadingа доп.сообщений
+    const triggerMessages = document.querySelector('.trigger-messages');
+    const observerOptions = {
+        root: document.querySelector('.block-messages'),
+        threshold: 0,
+    }
+    const observer = new IntersectionObserver(observeTriggerMessage, observerOptions);
+    observer.observe(triggerMessages);
+
+    // Отслеживание прокрутки блока сообщений для иммитации прочитанности сообщений пользователем
+    const notReadMessages = [];
+    const myID = JSON.parse(localStorage.getItem('auth')).id
+    let chatID = null;
+    const observerMessages = new IntersectionObserver((entries) => {
+        for (const entry of entries) {
+            // Если область скролла перекрывает эти сообщения, то они считаются прочитанными
+            if(entry.isIntersecting){
+                for (const entryMessage of mountedMessages.value) {
+                    if(entry.target.id == entryMessage.message.id){
+                        if(!entryMessage.message.isRead){
+                            if(+entryMessage.message.toUserID === myID){
+                                chatID = entryMessage.message.chatID;
+                                notReadMessages.push(entryMessage.message.id);
+                            }
+                        }else{
+                            // console.log('hello');
+                        }
+                    }
+                }
+            }
+        }
+        Promise.resolve(socket.emit('read-message', {
+            messages: notReadMessages,
+            fromUserID: myID,
+            toUserID: selectedChat.value.userID,
+            chatID
+        })).then(() => {
+            notReadMessages.length = 0;
+        })
+    }, observerOptions)
+    // setTimeout(() => {
+    // }, 500);
+    
+    watch(() => mountedMessages.value.length, (newValue) => {
+        if(newValue > 0){
+            for (const entry of mountedMessages.value) {
+                entry.messageDOM.isReady = entry.message.isReady;
+                observerMessages.observe(entry.messageDOM)
+            }
         }
     })
 
-    const panelLogs = document.querySelector('.logger__panel-logs');
-    watch(store.state.logs, (newValue) => {
-        setTimeout(() => {
-            panelLogs.scroll({
-                top: panelLogs.scrollHeight,
-                behavior: "smooth",
-            });
-        }, 10)
+    // Сообщение было прочитано
+    socket.on('read-message', (data) => {
+        console.log(data);
+        store.dispatch('getMessages', { chatID: data.chatID, limit: 15 })
+            .then(response => {
+                messages.value = response.messages;
+            })
     })
 
+    // Получение нового сообщения
+    socket.on('send-message', (message) => {
+        if(selectedChat.value.chatID == message?.chatID){
+            messages.value.push(message);
+            const blockMessages = document.querySelector('.block-messages');
+            setTimeout(() => {
+                blockMessages.scroll({
+                    top: blockMessages.scrollHeight,
+                    behavior: "smooth",
+                });
+            }, 10)
+            messageText.value = '';
+        }
+    })
+
+    store.dispatch('getAllUsers', (res) => {
+        for (const user of res) {
+            user.id = (+user.id)
+            addUser(user);
+        }
+    })
 })
 </script>
 
@@ -265,6 +389,7 @@ onMounted(() => {
     background-color: rgba(0,0,0, .3);
     backdrop-filter: blur(4px);
     cursor: pointer;
+    z-index: 60;
 }
 .panel-chats__close:hover{
     background-color: rgb(189, 75, 75, .3);
@@ -272,7 +397,7 @@ onMounted(() => {
 .panel-chats__open{
     position: absolute;
     left: 4px;
-    top: 10px;
+    top: 35px;
     position: absolute;
     width: 20px;
     height: 40px;
@@ -281,6 +406,7 @@ onMounted(() => {
     background-color: rgba(0,0,0, .3);
     backdrop-filter: blur(4px);
     cursor: pointer;
+    z-index: 60;
 }
 .panel-chats__open:hover{
     background-color: rgba(86, 118, 167, 0.3);
@@ -300,10 +426,20 @@ onMounted(() => {
     background-color: rgb(46, 53, 53);
     border-radius: 10px;
     margin: 10px auto 10px auto;
+    padding: 30px 0 0 0;
     overflow-y: auto;
     overflow-x: hidden;
 }
+.trigger-messages{
+    position: absolute;
+    top: 0;
+    width: 100%;
+    height: 45px;
+    background: rgba(0,0,0,0);
+}
 .chat__topbar{
+    position: absolute;
+    top: 0;
     width: 100%;
     height: max-content;
     display: flex;
@@ -319,10 +455,14 @@ onMounted(() => {
 }
 .chat__topbar-title{
     font-family: sans-serif;
-    margin: 6px;
+    font-weight: bolder;
+    font-size: 1.18em;
 }
 .chat___topbar-status{
-
+    position: absolute;
+    right: 20px;
+    bottom: 5px;
+    font-family:monospace;
 }
 .if-none-message{
     position: relative;
