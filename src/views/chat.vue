@@ -118,7 +118,8 @@ import userPage from '@/components/userPage.vue';
 import notifyComp from '@/components/notifyComp.vue';
 import logComp from '@/components/logComp.vue';
 import { userActions, socket } from '@/socket/socket-config'
-import { ref, reactive, watch, onMounted, computed, nextTick } from 'vue';
+import LazyLoadingModule from '@/tools/lazyloading';
+import { ref, reactive, watch, onMounted, computed } from 'vue';
 import { useStore } from 'vuex';
 const store = useStore();
 
@@ -127,6 +128,7 @@ const isShowUserPage = ref(false);
 const isShowTriggerMessages = ref(false);
 const isShowNotifyNewMessage = ref(false);
 const userWriteMessage = {
+    isStop: ref(false),
     isShow: ref(false),
     data: ref(''),
 };
@@ -188,7 +190,6 @@ function addUser(user){
 }
 
 function selectChat(chat){
-    console.log(chat);
     store.dispatch('getMessages', { chatID: chat.chatID, limit: 15 })
         .then(response => {
             messages.value = response.messages;
@@ -247,6 +248,8 @@ function sendMessage(){
         fromUsername: JSON.parse(localStorage.getItem('auth')).username,
         toUserID: selectedChat.value?.userID,
     })
+    // Принудительная остановка lazyloading
+    userWriteMessage.isStop.value = true;
 }
 
 
@@ -260,7 +263,8 @@ function unmountMessage(messageObj){
 }
 
 onMounted(() => {
-    // logger('example.text 123', logger.yel)
+    const myUsername = JSON.parse(localStorage.getItem('auth')).username;
+    const myID = JSON.parse(localStorage.getItem('auth')).id
 
     // Получение чатов
     store.dispatch('getUserChats', { userID: JSON.parse(localStorage.getItem('auth')).id })
@@ -284,7 +288,7 @@ onMounted(() => {
         root: document.querySelector('.block-messages'),
         threshold: 0.4,
     }
-    const myID = JSON.parse(localStorage.getItem('auth')).id
+
     const observerMessages = new IntersectionObserver((entries) => {
         for (const entry of entries) {
             if(entry.isIntersecting){
@@ -292,7 +296,6 @@ onMounted(() => {
                     if(entry.target.id == entryMessage.message.id){
                         if(!entryMessage.message.isRead){
                             if(+entryMessage.message.toUserID === myID){
-                                logger('Прочитано сообщение. Отправка отчета на сервер...', logger.blue);
                                 socket.emit('read-message', {
                                     message: entryMessage.message.id,
                                     fromUserID: myID,
@@ -318,8 +321,8 @@ onMounted(() => {
 
     // Сообщение было прочитано
     socket.on('read-message', (data) => {
-        if(selectedChat.value.chatID){
-            store.dispatch('getMessages', { chatID: data.chatID, limit: 15 })
+        if(selectedChat.value.chatID && data.fromUserID != myID){
+            store.dispatch('getMessages', { chatID: data.chatID, limit: messages.value.length })
                 .then(response => {
                     messages.value = response.messages;
                 })
@@ -364,17 +367,48 @@ onMounted(() => {
         } 
     })
 
+    // Показывать, что мне пишет пользователь
+    socket.on('write-message', (response) => {
+        if(response.isWrite){
+            if(selectedChat.value.userID === response.fromUserID){
+                userWriteMessage.data.value = `${response.username} печатает...`;
+                userWriteMessage.isShow.value = true;
+            }
+        } else {
+            if(selectedChat.value.userID === response.fromUserID){
+                userWriteMessage.data.value = '';
+                userWriteMessage.isShow.value = false;
+            }
+        }
+    })
+
+    // Отображать другому пользователю, что я печатаю сообщение
+    const heartBeat = new LazyLoadingModule.LL_HeartBeat(1500);
     watch(messageText, (newValue) => {
-        console.log('Пользователь печатает...');
-    })
+        heartBeat.payload(newValue, userWriteMessage.isStop.value, (execute) => {
+            // Принудительная остановка lazyloading
+            if(execute === 0){
+                userWriteMessage.isStop.value = false;
+            }
+            if(execute){
+                socket.emit('write-message', { 
+                    isWrite: execute, 
+                    username: myUsername,
+                    fromUserID: myID,
+                    toUserID: selectedChat.value.userID
+                });
+            } else {
+                socket.emit('write-message', { 
+                    isWrite: execute, 
+                    username: myUsername,
+                    fromUserID: myID,
+                    toUserID: selectedChat.value.userID
+                });
+            }
+        })
 
-    // !!! ЗДЕСЬ НУЖНА БУДЕТ ЛЕНИВАЯ ПОДГРУЗКА !!!
-    // Пользователь печатает сообщение
-    socket.on('user-write-message', () => {
-        userWriteMessage.data.value = 'john123 печатает...';
-        userWriteMessage.isShow.value = true;
     })
-
+    
     store.dispatch('getAllUsers', (res) => {
         for (const user of res) {
             user.id = (+user.id)
