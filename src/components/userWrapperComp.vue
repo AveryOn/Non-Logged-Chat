@@ -66,6 +66,7 @@ function scrollUsersLeft(){
     align-items: center;
     background-color: rgb(46, 53, 53);
     border-radius: 10px;
+    font-family: monospace;
 }
 
 .user-wrapper__btn{

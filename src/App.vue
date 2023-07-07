@@ -35,5 +35,6 @@ onBeforeMount(() => {
 body {
     background-color: rgb(61, 78, 77);
     color: bisque;
+    font-family: monospace;
 }
 </style>

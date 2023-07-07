@@ -13,12 +13,13 @@ function disconnectUser() {
 }
 
 // Создание сообщения
-function createMessage({ chatID, text, fromUserID, toUserID }) {
+function createMessage({ chatID, text, fromUserID, fromUsername, toUserID }) {
     const newChat = {
         messageID: Date.now(),
         chatID,
         text,
         fromUserID,
+        fromUsername,
         toUserID,
         createdAt: moment(Date.now()).format('DD.MM.YYYY HH:mm:ss'),
     }

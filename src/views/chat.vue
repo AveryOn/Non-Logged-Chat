@@ -2,6 +2,7 @@
     <div class="main">
 
         <myIconComp @click="userActions.disconnectUser"></myIconComp>
+        <notifyComp v-show="isShowNotifyNewMessage" :notify-data="notifyData"></notifyComp>
 
         <userPage 
         :show="isShowUserPage" 
@@ -13,7 +14,7 @@
 
 <!-- CHAT -->
         <div class="chat">
-
+            
             <!-- IF NO SELECT CHAT -->
             <div class="if-no-select-chat" v-show="!selectedChat.chatID">
                 <h1 class="if-no-select-chat__text">
@@ -22,7 +23,7 @@
             </div> 
 
             <!-- CHATS -->
-            <span class="panel-chats__open" @click="isShowPanelChats = true"></span>
+            <span class="panel-chats__open" @click="openPanelChats"></span>
 
             <div class="panel-chats" v-show="isShowPanelChats">
                 <span class="panel-chats__close" @click="isShowPanelChats = false"></span>
@@ -47,6 +48,12 @@
 
             <!-- TOPBAR -->
             <div class="chat__topbar" v-show="selectedChat.chatID">
+                <!-- USER WRITE -->
+                <span class="user-write-message" v-show="userWriteMessage.isShow.value">
+                    <p>
+                        {{ userWriteMessage.data.value }}
+                    </p>
+                </span>
                 <p class="chat__topbar-title">
                     {{ selectedChat?.username }}
                 </p>
@@ -56,6 +63,8 @@
             </div>
             <!-- BLOCK MESSAGES -->
             <div class="block-messages">
+
+
                 <!-- триггер блок для подгрузки сообщений -->
                 <div class="trigger-messages" v-show="isShowTriggerMessages"></div>
 
@@ -106,6 +115,7 @@ import itemChatComp from '@/components/itemChatComp.vue';
 import itemMessageComp from '@/components/itemMessageComp.vue';
 import userWrapperComp from '@/components/userWrapperComp.vue';
 import userPage from '@/components/userPage.vue';
+import notifyComp from '@/components/notifyComp.vue';
 import logComp from '@/components/logComp.vue';
 import { userActions, socket } from '@/socket/socket-config'
 import { ref, reactive, watch, onMounted, computed, nextTick } from 'vue';
@@ -115,6 +125,11 @@ const store = useStore();
 const isShowPanelChats = ref(false);
 const isShowUserPage = ref(false);
 const isShowTriggerMessages = ref(false);
+const isShowNotifyNewMessage = ref(false);
+const userWriteMessage = {
+    isShow: ref(false),
+    data: ref(''),
+};
 
 const messageText = ref('');
 const selectedChat = ref({ chatID: null, username: null, userID: null });
@@ -122,18 +137,33 @@ const userCurrentPage = reactive({username: '', friends: [], color: ''});
 const messages = ref([]);
 const users = ref([]);
 const chats = ref([]);
+const notifyData = ref(null);
 
 // ЦВЕТНОЙ ЛОГ
 function logger(msg, color) {
     console.log("%c" + msg, "color:" + color + ";font-weight:bold;");
 }
+logger.red = 'hsl(355, 48%, 48%)';
+logger.green = 'hsl(100, 50%, 45%)';
+logger.blue = 'hsl(180, 50%, 45%)';
+logger.yel = 'hsl(405, 50%, 45%)';
 
+// Открыть страницу пользователя. Нажатие на мини-иконку
 function openUserPage(user){
     userCurrentPage.id = user.id;
     userCurrentPage.username = user.username;
     userCurrentPage.friends = user.friends;
     userCurrentPage.color = user.color;
     isShowUserPage.value = true;
+}
+
+// Открыть панель чатов
+function openPanelChats(){
+    isShowPanelChats.value = true;
+    store.dispatch('getUserChats', { userID: JSON.parse(localStorage.getItem('auth')).id })
+        .then((data) => {
+            chats.value = data;
+        })
 }
 
 // Вычисление рандомного цвета
@@ -158,6 +188,7 @@ function addUser(user){
 }
 
 function selectChat(chat){
+    console.log(chat);
     store.dispatch('getMessages', { chatID: chat.chatID, limit: 15 })
         .then(response => {
             messages.value = response.messages;
@@ -213,9 +244,11 @@ function sendMessage(){
         chatID: selectedChat.value?.chatID,
         text: messageText.value,
         fromUserID: JSON.parse(localStorage.getItem('auth')).id,
+        fromUsername: JSON.parse(localStorage.getItem('auth')).username,
         toUserID: selectedChat.value?.userID,
     })
 }
+
 
 const mountedMessages = ref([]);
 function mountMessage(messageObj){
@@ -227,7 +260,10 @@ function unmountMessage(messageObj){
 }
 
 onMounted(() => {
-    store.dispatch('getUserChats', {userID: JSON.parse(localStorage.getItem('auth')).id})
+    // logger('example.text 123', logger.yel)
+
+    // Получение чатов
+    store.dispatch('getUserChats', { userID: JSON.parse(localStorage.getItem('auth')).id })
         .then((data) => {
             chats.value = data;
         })
@@ -243,43 +279,38 @@ onMounted(() => {
     observer.observe(triggerMessages);
 
     // Отслеживание прокрутки блока сообщений для иммитации прочитанности сообщений пользователем
-    const notReadMessages = [];
+    // блок опций для наблюдателя чтения сообщений
+    const observerReadMessageOptions = {
+        root: document.querySelector('.block-messages'),
+        threshold: 0.4,
+    }
     const myID = JSON.parse(localStorage.getItem('auth')).id
-    let chatID = null;
     const observerMessages = new IntersectionObserver((entries) => {
         for (const entry of entries) {
-            // Если область скролла перекрывает эти сообщения, то они считаются прочитанными
             if(entry.isIntersecting){
                 for (const entryMessage of mountedMessages.value) {
                     if(entry.target.id == entryMessage.message.id){
                         if(!entryMessage.message.isRead){
                             if(+entryMessage.message.toUserID === myID){
-                                chatID = entryMessage.message.chatID;
-                                notReadMessages.push(entryMessage.message.id);
+                                logger('Прочитано сообщение. Отправка отчета на сервер...', logger.blue);
+                                socket.emit('read-message', {
+                                    message: entryMessage.message.id,
+                                    fromUserID: myID,
+                                    toUserID: selectedChat.value.userID,
+                                    chatID: entryMessage.message.chatID,
+                                })
                             }
-                        }else{
-                            // console.log('hello');
                         }
                     }
                 }
             }
         }
-        Promise.resolve(socket.emit('read-message', {
-            messages: notReadMessages,
-            fromUserID: myID,
-            toUserID: selectedChat.value.userID,
-            chatID
-        })).then(() => {
-            notReadMessages.length = 0;
-        })
-    }, observerOptions)
-    // setTimeout(() => {
-    // }, 500);
-    
+    }, observerReadMessageOptions)
+
+    // Передает наблюдателю сообщения чата когда они вмонтированны в документ
     watch(() => mountedMessages.value.length, (newValue) => {
         if(newValue > 0){
             for (const entry of mountedMessages.value) {
-                entry.messageDOM.isReady = entry.message.isReady;
                 observerMessages.observe(entry.messageDOM)
             }
         }
@@ -287,26 +318,61 @@ onMounted(() => {
 
     // Сообщение было прочитано
     socket.on('read-message', (data) => {
-        console.log(data);
-        store.dispatch('getMessages', { chatID: data.chatID, limit: 15 })
-            .then(response => {
-                messages.value = response.messages;
-            })
+        if(selectedChat.value.chatID){
+            store.dispatch('getMessages', { chatID: data.chatID, limit: 15 })
+                .then(response => {
+                    messages.value = response.messages;
+                })
+        }
     })
 
     // Получение нового сообщения
-    socket.on('send-message', (message) => {
-        if(selectedChat.value.chatID == message?.chatID){
-            messages.value.push(message);
+    socket.on('send-message', (response) => {
+        const myID = JSON.parse(localStorage.getItem('auth')).id
+        if(myID == response.toUserID){
+            notifyData.value = { notifyContent: `Получено новое сообщение от ${response.fromUsername}` }
+            isShowNotifyNewMessage.value = true;
+            setTimeout(() => {
+                isShowNotifyNewMessage.value = false;
+            }, 2000);
+        }
+        // Если открыта панель чатов, она должна обновлятся для видимости приходящего сообщения
+        if(isShowPanelChats.value){
+            store.dispatch('getUserChats', { userID: myID })
+                .then((data) => {
+                    chats.value = data;
+                })
+        }
+        // Если открыт текущий чат в котором приходит сообщение
+        if(selectedChat.value.chatID == response?.message.chatID){
+            messages.value.push(response.message);
+            if(response.created){
+                // Если сообщение первое и чат был создан, то у пользователей обновляется список чатов
+                store.dispatch('getUserChats', { userID: myID })
+                    .then((data) => {
+                        chats.value = data;
+                    })
+            }
             const blockMessages = document.querySelector('.block-messages');
             setTimeout(() => {
                 blockMessages.scroll({
                     top: blockMessages.scrollHeight,
                     behavior: "smooth",
                 });
-            }, 10)
+            }, 0)
             messageText.value = '';
-        }
+        } 
+    })
+
+    watch(messageText, (newValue) => {
+        console.log('Пользователь печатает...');
+    })
+
+    // !!! ЗДЕСЬ НУЖНА БУДЕТ ЛЕНИВАЯ ПОДГРУЗКА !!!
+    // Пользователь печатает сообщение
+    socket.on('user-write-message', () => {
+        userWriteMessage.data.value = 'john123 печатает...';
+        userWriteMessage.isShow.value = true;
     })
 
     store.dispatch('getAllUsers', (res) => {
@@ -430,6 +496,7 @@ onMounted(() => {
     overflow-y: auto;
     overflow-x: hidden;
 }
+
 .trigger-messages{
     position: absolute;
     top: 0;
@@ -453,6 +520,17 @@ onMounted(() => {
     border-top-right-radius: 10px;
     z-index: 50;
 }
+.user-write-message{
+    position: absolute;
+    bottom: -20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: rgba(0,0,0, .35);
+    border-radius: 20px;
+    padding: 1px 10px;
+    cursor: default;
+}
 .chat__topbar-title{
     font-family: sans-serif;
     font-weight: bolder;
@@ -462,7 +540,7 @@ onMounted(() => {
     position: absolute;
     right: 20px;
     bottom: 5px;
-    font-family:monospace;
+    font-family: monospace;
 }
 .if-none-message{
     position: relative;

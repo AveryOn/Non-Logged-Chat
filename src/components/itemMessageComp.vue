@@ -59,12 +59,12 @@ const message = ref(null);
 
 onMounted(() => {
     // Если сообщение монтируется, генерируется событие mountMessage
-    emit('mountMessage', {messageDOM: message.value, message: props.messageData});
+    emit('mountMessage', { messageDOM: message.value, message: props.messageData });
 });
 
 onUnmounted(() => {
     // Если сообщение размонтируется, генерируется событие unmountMessage
-    emit('unmountMessage', {messageDOM: message.value, message: props.messageData});
+    emit('unmountMessage', { messageDOM: message.value, message: props.messageData });
 });
 
 </script>
