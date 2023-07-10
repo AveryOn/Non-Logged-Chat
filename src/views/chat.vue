@@ -15,6 +15,14 @@
 <!-- CHAT -->
         <div class="chat">
             
+            <!-- Подтверждение удаления сообщения -->
+            <askDeleteComp 
+            :show="isAskDelete" 
+            @close="isAskDelete = false"
+            @delete-for-me="deleteMessages"
+            @delete-for-everyone="deleteMessages"
+            ></askDeleteComp>
+
             <!-- IF NO SELECT CHAT -->
             <div class="if-no-select-chat" v-show="!selectedChat.chatID">
                 <h1 class="if-no-select-chat__text">
@@ -61,10 +69,16 @@
                     {{ (store.state.activeUsers.includes(selectedChat?.userID))? 'online' : 'offline' }}
                 </p>
             </div>
+
+            <!-- TOOLS BAR -->
+            <toolsBarComp 
+            :show="selectedMessages.length > 0"
+            @delete-messages="isAskDelete = true"
+            >
+            </toolsBarComp>
+
             <!-- BLOCK MESSAGES -->
             <div class="block-messages">
-
-
                 <!-- триггер блок для подгрузки сообщений -->
                 <div class="trigger-messages" v-show="isShowTriggerMessages"></div>
 
@@ -75,12 +89,23 @@
                 <itemMessageComp
                 @mount-message="mountMessage"
                 @unmount-message="unmountMessage"
+                @is-select="selectMessage"
+                @reply="selectReplyMessage"
+                @find-message="findMessage"
                 v-for="message in messages"
                 :message-data="message"
+                :is-reset-selection="(selectedMessages.length)? false : true"
                 :key="message.id"
                 >
                     {{ message?.text }}
                 </itemMessageComp>
+                <fillReplyMessageComp
+                v-if="selectedReplyMessage.replyToID"
+                :content="selectedReplyMessage.replyToContent"
+                :username="selectedChat.username"
+                @cancel-reply="cancelReplyMessage"
+                >
+                </fillReplyMessageComp>
             </div>
 
             <!-- INPUT -->
@@ -108,11 +133,14 @@
 </template>
 
 <script setup>
+import toolsBarComp from '@/components/toolsBarComp.vue';
+import askDeleteComp from '@/components/askDeleteComp.vue';
 import inputComp from '@/components/inputComp.vue';
 import buttonComp from '@/components/buttonComp.vue';
 import myIconComp from '@/components/myIconComp.vue';
 import itemChatComp from '@/components/itemChatComp.vue';
 import itemMessageComp from '@/components/itemMessageComp.vue';
+import fillReplyMessageComp from '@/components/fillReplyMessageComp.vue';
 import userWrapperComp from '@/components/userWrapperComp.vue';
 import userPage from '@/components/userPage.vue';
 import notifyComp from '@/components/notifyComp.vue';
@@ -127,6 +155,8 @@ const isShowPanelChats = ref(false);
 const isShowUserPage = ref(false);
 const isShowTriggerMessages = ref(false);
 const isShowNotifyNewMessage = ref(false);
+const isAskDelete = ref(false);
+const isFindMessage = ref(false);
 const userWriteMessage = {
     isStop: ref(false),
     isShow: ref(false),
@@ -135,6 +165,8 @@ const userWriteMessage = {
 
 const messageText = ref('');
 const selectedChat = ref({ chatID: null, username: null, userID: null });
+const selectedMessages = ref([]);
+const selectedReplyMessage = ref({ replyToID: null, replyToContent: null })
 const userCurrentPage = reactive({username: '', friends: [], color: ''});
 const messages = ref([]);
 const users = ref([]);
@@ -189,8 +221,97 @@ function addUser(user){
     }
 }
 
+function selectMessage(messageID, isSelect){
+    if(isSelect){
+        if(!selectedMessages.value.includes(messageID)){
+            selectedMessages.value.push(messageID);
+        }
+    } else {
+        selectedMessages.value.splice(selectedMessages.value.indexOf(messageID), 1);
+    }
+}
+
+// Добавляет данные reply-сообщения
+function selectReplyMessage(message){
+    const blockMessages = document.querySelector('.block-messages');
+    selectedReplyMessage.value = { 
+        replyToID: message.id,
+        replyToContent: message.text  
+    }
+    setTimeout(() => {
+        blockMessages.scroll({
+            top: blockMessages.scrollHeight,
+            behavior: "smooth",
+        });
+    }, 0)
+}
+
+// Поиск сообщения по его ссылке в reply-сообщении
+function findMessage(replyToID){
+    const myID = JSON.parse(localStorage.getItem('auth')).id;
+    const blockMessages = document.querySelector('.block-messages');
+    let isFound = false;
+    messages.value.forEach(message => {
+        if(message.id == replyToID){
+            isFound = true;
+            const findMessage = document.getElementById(message.id);
+            blockMessages.scroll({
+                top: findMessage.offsetTop - 50,
+                behavior: "smooth",
+            });
+            message.isFindMessage = true;
+            // Через время подсветка найденного сообщения отключается
+            setTimeout(() => {
+                delete message.isFindMessage;
+            }, 1200);
+        }
+    })
+    if(!isFound){
+        store.dispatch('findReplyingMessage', { 
+            messageID: replyToID,
+            chatID: selectedChat.value.chatID, 
+            userID: myID, 
+        }).then(response => {
+            messages.value = response.messages;
+            for (const entry of messages.value) {
+                if(entry.id == response.foundMessageID){
+                    setTimeout(() => {
+                        entry.isFindMessage = true;
+                        const findMessage = document.getElementById(response.foundMessageID);
+                        if(response.done){
+                            blockMessages.scroll({
+                                top: findMessage.offsetTop - 15,
+                                behavior: "smooth",
+                            });
+                        } else {
+                            blockMessages.scroll({
+                                top: findMessage.offsetTop - 50,
+                                behavior: "smooth",
+                            });
+                        }
+                    }, 0)
+                    setTimeout(() => {
+                        delete entry.isFindMessage;
+                    }, 1200);
+                    break;
+                }
+            }
+            return;
+        })
+    }
+}
+
+// Отменяет выделение reply-сообщения
+function cancelReplyMessage() {
+    selectedReplyMessage.value = { 
+        replyToID: null,
+        replyToContent: null  
+    }
+}
+
 function selectChat(chat){
-    store.dispatch('getMessages', { chatID: chat.chatID, limit: 15 })
+    const myID = JSON.parse(localStorage.getItem('auth')).id;
+    store.dispatch('getMessages', { chatID: chat.chatID, userID: myID, limit: 15 })
         .then(response => {
             messages.value = response.messages;
             const blockMessages = document.querySelector('.block-messages');
@@ -212,11 +333,13 @@ function selectChat(chat){
 
 // Lazy-loading сообщений по 15шт по достижению скроллом триггерного блока
 async function observeTriggerMessage(entries){
+    const myID = JSON.parse(localStorage.getItem('auth')).id;
     const blockMessages = document.querySelector('.block-messages');
     const beforeScroll = blockMessages.scrollHeight;
     if(entries[0].isIntersecting){
         const response = await store.dispatch('getMessages', { 
-            chatID: selectedChat.value.chatID, 
+            chatID: selectedChat.value.chatID,
+            userID: myID,
             limit: (messages.value.length + 15) 
         })
         messages.value = response.messages;
@@ -240,18 +363,61 @@ async function observeTriggerMessage(entries){
 function addLog(typeLog, message){
     store.commit('addLog', { typeLog, message })
 }
+
+// Отправка сообщения другому пользователю
 function sendMessage(){
-    userActions.createMessage({ 
-        chatID: selectedChat.value?.chatID,
-        text: messageText.value,
-        fromUserID: JSON.parse(localStorage.getItem('auth')).id,
-        fromUsername: JSON.parse(localStorage.getItem('auth')).username,
-        toUserID: selectedChat.value?.userID,
-    })
+    // Обычная отправка сообщения
+    if(!selectedReplyMessage.value.replyToID){
+        userActions.createMessage({ 
+            isReply: false,
+            fromUsername: JSON.parse(localStorage.getItem('auth')).username,
+            text: messageText.value,
+            fromUserID: JSON.parse(localStorage.getItem('auth')).id,
+            toUserID: selectedChat.value.userID,
+            chatID: selectedChat.value?.chatID,
+        })
+    }
+    // Отправка сообщения с ответом на выбранное сообщение (reply-сообщение)
+    else if(selectedReplyMessage.value.replyToID){
+        userActions.createReplyMessage({ 
+            isReply: true,
+            fromUsername: JSON.parse(localStorage.getItem('auth')).username,
+            text: messageText.value,
+            fromUserID: JSON.parse(localStorage.getItem('auth')).id,
+            toUserID: selectedChat.value?.userID,
+            replyToID: selectedReplyMessage.value.replyToID,
+            replyToContent: selectedReplyMessage.value.replyToContent,
+            chatID: selectedChat.value.chatID,
+        })
+    }
     // Принудительная остановка lazyloading
     userWriteMessage.isStop.value = true;
+    if(selectedReplyMessage.value.replyToID){
+        cancelReplyMessage();
+    }
 }
 
+// Удаление выбранных собщений
+function deleteMessages(isAllUsers){
+    const myID = JSON.parse(localStorage.getItem('auth')).id;
+    if(isAllUsers === false){
+        store.dispatch('deleteMessages', { messagesID: selectedMessages.value, userID: myID, isAllUsers })
+            .then(() => {
+                store.dispatch('getMessages', { chatID: selectedChat.value.chatID, userID: myID, limit: 15 })
+                    .then(response => {
+                        messages.value = response.messages;
+                        selectedMessages.value = []
+                    })
+            });
+    } else {
+        const toUserID = selectedChat.value.userID;
+        socket.emit('delete-message', { 
+            messagesID: selectedMessages.value, 
+            fromUserID: myID,
+            toUserID
+        })
+    }
+}
 
 const mountedMessages = ref([]);
 function mountMessage(messageObj){
@@ -265,6 +431,29 @@ function unmountMessage(messageObj){
 onMounted(() => {
     const myUsername = JSON.parse(localStorage.getItem('auth')).username;
     const myID = JSON.parse(localStorage.getItem('auth')).id
+
+    // Получение всех пользователей
+    store.dispatch('getAllUsers', (res) => {
+        for (const user of res) {
+            user.id = (+user.id)
+            addUser(user);
+        }
+    })
+
+    // Обработка нажатия клавиш
+    document.onkeydown = function(e) {
+        // Ответить на предыдущее сообщение
+        if(e.code === 'ArrowUp'){
+            selectReplyMessage(messages.value[messages.value.length - 1]);
+        }
+        // Сбросить выделенные сообщение нажатием ESC
+        if(e.code === "Escape"){
+            selectedMessages.value = [];
+            if(selectedReplyMessage.value.replyToID){
+                cancelReplyMessage();
+            }
+        }
+    }
 
     // Получение чатов
     store.dispatch('getUserChats', { userID: JSON.parse(localStorage.getItem('auth')).id })
@@ -289,26 +478,25 @@ onMounted(() => {
         threshold: 0.4,
     }
 
+    // Отслеживание непрочитанных сообщений
     const observerMessages = new IntersectionObserver((entries) => {
         for (const entry of entries) {
             if(entry.isIntersecting){
-                for (const entryMessage of mountedMessages.value) {
-                    if(entry.target.id == entryMessage.message.id){
-                        if(!entryMessage.message.isRead){
-                            if(+entryMessage.message.toUserID === myID){
-                                socket.emit('read-message', {
-                                    message: entryMessage.message.id,
-                                    fromUserID: myID,
-                                    toUserID: selectedChat.value.userID,
-                                    chatID: entryMessage.message.chatID,
-                                })
-                            }
+                for (const entryMessage of messages.value) {
+                    if(entry.target.id == entryMessage.id){
+                        if(entryMessage.isRead === false && entryMessage.toUserID == myID){
+                            socket.emit('read-message', {
+                                message: entryMessage.id,
+                                fromUserID: myID,
+                                toUserID: selectedChat.value.userID,
+                                chatID: entryMessage.chatID,
+                            })
                         }
                     }
                 }
             }
         }
-    }, observerReadMessageOptions)
+    }, observerReadMessageOptions);
 
     // Передает наблюдателю сообщения чата когда они вмонтированны в документ
     watch(() => mountedMessages.value.length, (newValue) => {
@@ -317,21 +505,25 @@ onMounted(() => {
                 observerMessages.observe(entry.messageDOM)
             }
         }
-    })
+        else {
+            mountedMessages.value = [];
+        }
+    });
 
     // Сообщение было прочитано
     socket.on('read-message', (data) => {
-        if(selectedChat.value.chatID && data.fromUserID != myID){
-            store.dispatch('getMessages', { chatID: data.chatID, limit: messages.value.length })
+        if(selectedChat.value.chatID){
+            store.dispatch('getMessages', { chatID: data.chatID, userID: myID, limit: messages.value.length })
                 .then(response => {
                     messages.value = response.messages;
                 })
         }
-    })
+    });
 
     // Получение нового сообщения
     socket.on('send-message', (response) => {
         const myID = JSON.parse(localStorage.getItem('auth')).id
+        // Если я получатель - Отображать уведомление о получении сообщения
         if(myID == response.toUserID){
             notifyData.value = { notifyContent: `Получено новое сообщение от ${response.fromUsername}` }
             isShowNotifyNewMessage.value = true;
@@ -365,7 +557,16 @@ onMounted(() => {
             }, 0)
             messageText.value = '';
         } 
-    })
+    });
+
+    // Удаление сообщения у всех участников чата
+    socket.on('delete-message', () => {
+        store.dispatch('getMessages', { chatID: selectedChat.value.chatID, userID: myID, limit: 15 })
+            .then(response => {
+                messages.value = response.messages;
+                selectedMessages.value = [];
+            })
+    });
 
     // Показывать, что мне пишет пользователь
     socket.on('write-message', (response) => {
@@ -380,7 +581,7 @@ onMounted(() => {
                 userWriteMessage.isShow.value = false;
             }
         }
-    })
+    });
 
     // Отображать другому пользователю, что я печатаю сообщение
     const heartBeat = new LazyLoadingModule.LL_HeartBeat(1500);
@@ -407,15 +608,9 @@ onMounted(() => {
             }
         })
 
-    })
-    
-    store.dispatch('getAllUsers', (res) => {
-        for (const user of res) {
-            user.id = (+user.id)
-            addUser(user);
-        }
-    })
-})
+    });
+
+});
 </script>
 
 <style scoped>

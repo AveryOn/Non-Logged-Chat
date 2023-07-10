@@ -12,19 +12,38 @@ function disconnectUser() {
     socket.disconnect();
 }
 
-// Создание сообщения
-function createMessage({ chatID, text, fromUserID, fromUsername, toUserID }) {
-    const newChat = {
+// Создание сообщения c ответом или без
+function createMessage({ isReply, chatID, text, fromUserID, fromUsername, toUserID }) {
+    const newMessage = {
+        isReply,
         messageID: Date.now(),
-        chatID,
         text,
         fromUserID,
-        fromUsername,
         toUserID,
-        createdAt: moment(Date.now()).format('DD.MM.YYYY HH:mm:ss'),
+        chatID,
+        fromUsername,
     }
     try {
-        socket.emit('send-message', newChat);
+        socket.emit('send-message', newMessage);
+    } catch (err) {
+        console.log(err);
+    }
+}
+
+function createReplyMessage({ isReply, fromUsername, text, fromUserID, toUserID, replyToID, replyToContent, chatID }) {
+    const newMessage = {
+        isReply,
+        fromUsername,
+        messageID: Date.now(),
+        text,
+        fromUserID,
+        toUserID,
+        replyToID,
+        replyToContent,
+        chatID,
+    }
+    try {
+        socket.emit('send-message', newMessage);
     } catch (err) {
         console.log(err);
     }
@@ -34,4 +53,5 @@ export default {
     connectUser,
     disconnectUser,
     createMessage,
+    createReplyMessage,
 }

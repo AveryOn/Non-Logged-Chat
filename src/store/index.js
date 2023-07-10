@@ -95,9 +95,9 @@ export default createStore({
         },
 
         // Получение массива сообщений определенного чата
-        async getMessages({ state }, { chatID, limit }) {
+        async getMessages({ state }, { chatID, userID, limit }) {
             try {
-                const response = await axios.get(state.hostServer + `/message/${chatID}/${limit}`, {
+                const response = await axios.get(state.hostServer + `/message/${userID}/${chatID}/${limit}`, {
                     headers: {
                         'Content-Type': 'application/x-www-form-urlencoded'
                     }
@@ -108,29 +108,42 @@ export default createStore({
             }
         },
 
-        // // Создание сообщения
-        // async createMessage({ state }, { chatID, text, fromUserID, toUserID }) {
-        //     const newChat = {
-        //         messageID: Date.now(),
-        //         chatID,
-        //         text,
-        //         fromUserID,
-        //         toUserID,
-        //         createdAt: moment(Date.now()).format('DD.MM.YYYY HH:mm:ss'),
-        //     }
-        //     try {
-        //         const response = await axios.post(state.hostServer + `/message/create/`, {
-        //             ...newChat
-        //         }, {
-        //             headers: {
-        //                 'Content-Type': 'application/x-www-form-urlencoded'
-        //             }
-        //         })
-        //         return response.data;
-        //     } catch (err) {
-        //         console.log(err);
-        //     }
-        // }
+        // Удаление сообщений
+        async deleteMessages({ state }, { messagesID, userID, isAllUsers }) {
+            try {
+                axios.post(state.hostServer + `/message/delete`, {
+                    messagesID,
+                    userID,
+                    isAllUsers,
+                }, {
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded'
+                    }
+                }).then(response => {
+                    console.log(response);
+                })
+            } catch (err) {
+                console.log(err);
+            }
+        },
+
+        // Поиск сообщения на которое ссылается ответное сообщение
+        async findReplyingMessage({ state }, { messageID, chatID, userID }) {
+            try {
+                const response = await axios.post(state.hostServer + `/message/find-message`, {
+                    messageID,
+                    chatID,
+                    userID,
+                }, {
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded'
+                    }
+                })
+                return response.data;
+            } catch (err) {
+                console.log(err);
+            }
+        }
 
     },
     modules: {
