@@ -9,17 +9,30 @@
         <div class="fill-reply-message__items">
             <!-- <p class="fill-reply-message__item">{{ props.username }}</p> -->
             <p class="fill-reply-message__content">{{ props.content }}</p>
+
         </div>
         <span class="material-symbols-outlined" @click="$emit('cancelReply')">
             close
         </span>
+        <div class="fill-reply-message__forward-count" v-show="props.forwardedMessagesCount > 0 && props.isForwardMessages">
+            + Forwarded messages: {{ props.forwardedMessagesCount }} pcs
+        </div>
+
     </div>
 </template>
 
 <script setup>
 const props = defineProps({
     username: String,
-    content: String
+    content: String,
+    forwardedMessagesCount: {
+        type: Number,
+        default: 0,
+    },
+    isForwardMessages: {
+        type: Boolean,
+        default: false,
+    }
 });
 defineEmits(['cancelReply']);
 
@@ -84,6 +97,20 @@ defineEmits(['cancelReply']);
     white-space: nowrap;
     text-overflow: ellipsis;
     cursor: pointer;
+}
+.fill-reply-message__forward-count{
+    width: 100%;
+    background-color: rgba(50, 112, 99, 0.7);
+    font-family: cursive;
+    color: rgba(238, 231, 222, 0.548);
+    padding: 8px 10px;
+    border-radius: 8px;
+    margin-bottom: 5px;
+    font-size: 1.17em;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    cursor: default;
 }
 .fill-reply-message__content:hover{
     background-color: rgba(72, 120, 136, 0.7);

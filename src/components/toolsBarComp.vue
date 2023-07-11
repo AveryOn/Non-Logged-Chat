@@ -1,6 +1,7 @@
 <template>
     <div class="tools-bar" v-show="props.show">
         <button class="tools-bar__btn" @click="$emit('deleteMessages')">Delete</button>
+        <button class="tools-bar__btn" @click="$emit('forwardMessages')">Forward..</button>
     </div>
 </template>
 
@@ -12,6 +13,7 @@ const props = defineProps({
         default: false
     }
 })
+defineEmits(['deleteMessages', 'forwardMessages']);
 
 </script>
 

@@ -22,14 +22,16 @@ function createMessage({ isReply, chatID, text, fromUserID, fromUsername, toUser
         toUserID,
         chatID,
         fromUsername,
+        forwardedMsg: [],
     }
+    console.log('Выполнилось: createMessage');
     try {
         socket.emit('send-message', newMessage);
     } catch (err) {
         console.log(err);
     }
 }
-
+// Отправка сообщения с ответом на выбранное сообщение (reply-сообщение)
 function createReplyMessage({ isReply, fromUsername, text, fromUserID, toUserID, replyToID, replyToContent, chatID }) {
     const newMessage = {
         isReply,
@@ -40,8 +42,42 @@ function createReplyMessage({ isReply, fromUsername, text, fromUserID, toUserID,
         toUserID,
         replyToID,
         replyToContent,
+        forwardedMsg: [],
         chatID,
     }
+    console.log('Выполнилось: createReplyMessage');
+    try {
+        socket.emit('send-message', newMessage);
+    } catch (err) {
+        console.log(err);
+    }
+}
+
+// Отправка сообщения, содержащее коллекцию сообщений для пересылки другому чату
+function createForwardedMessage({
+    isReply,
+    fromUsername,
+    text,
+    fromUserID,
+    toUserID,
+    replyToID,
+    replyToContent,
+    forwardedMessages,
+    chatID,
+}) {
+    const newMessage = {
+        isReply,
+        fromUsername,
+        messageID: Date.now(),
+        text,
+        fromUserID,
+        toUserID,
+        replyToID,
+        replyToContent,
+        forwardedMsg: forwardedMessages,
+        chatID,
+    }
+    console.log('Выполнилось: createForwardedMessage');
     try {
         socket.emit('send-message', newMessage);
     } catch (err) {
@@ -54,4 +90,5 @@ export default {
     disconnectUser,
     createMessage,
     createReplyMessage,
+    createForwardedMessage,
 }

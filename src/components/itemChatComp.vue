@@ -12,18 +12,29 @@
             </p>
             <span class="item-chat__not-read" v-show="computedReadableMessage"></span>
             
+            <div class="item-chat__draft" v-show="draft.draftEnable">
+                <p class="item-chat__draft-title">Draft:</p>
+                <p class="item-chat__draft-value" v-if="draft.draftType === 'text'">{{ draft.draftValue }}</p>
+            </div>
         </div>
     </div>
 </template>
 
 <script setup>
-import { computed, onMounted } from 'vue';
+import { ref, computed, onMounted, onUnmounted } from 'vue';
 const props = defineProps({
     chatData: {
         type: Object,
     },
 })
 const emit = defineEmits(['selectChat']);
+const draft = ref({ 
+    draftEnable: false, 
+    draftType: 'text', 
+    draftValue: null, 
+    forwardedCountMsg: 0 
+});
+
 function selectChat(){
     emit('selectChat', { 
         chatID: +props.chatData.chatID, 
@@ -58,7 +69,12 @@ const computedReadableMessage = computed(() => {
 })
 
 onMounted(() => {
-
+    const draftStorage = JSON.parse(localStorage.getItem('draft'))[props.chatData.chatID]
+    if(draftStorage.isForwardMessages === false && draftStorage.messageText) {
+        draft.value.draftEnable = true;
+        draft.value.draftType = 'text';
+        draft.value.draftValue = draftStorage.messageText;
+    } 
 })
 
 </script>
@@ -90,7 +106,8 @@ onMounted(() => {
 }
 .item-chat__body {
     display: flex;
-    align-items: center;
+    flex-direction: column;
+    align-items: flex-start;
     justify-content: space-between;
     width: 95%;
     padding: 5px 0 5px 10px;
@@ -105,11 +122,32 @@ onMounted(() => {
     max-width: 90%;
 }
 .item-chat__not-read {
-    top: 50%;
-    right: 0;
+    position: absolute;
+    top: 10px;
+    right: 10px;
     background-color: hsl(180, 46%, 38%);
     border-radius: 50%;
     width: 15px;
     height: 15px;
+}
+.item-chat__draft {
+    /* border: 1px solid black; */
+    display: flex;
+    align-items: center;
+    width: 90%;
+    padding: 5px 10px;
+}
+.item-chat__draft-title {
+    color: rgb(219, 59, 59);
+    font-family: sans-serif;
+    font-weight: bolder;
+    margin-right: 10px;
+}
+.item-chat__draft-value {
+    color: rgb(190, 190, 190);
+    font-style: italic;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
 }
 </style>

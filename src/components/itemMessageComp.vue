@@ -63,9 +63,9 @@ const myID = JSON.parse(localStorage.getItem('auth')).id;
 function selectMessage(){
     isSelectMessage.value = !isSelectMessage.value;
     if(isSelectMessage.value){
-        emit('isSelect', props.messageData.id, true);
+        emit('isSelect', props.messageData, true);
     } else {
-        emit('isSelect', props.messageData.id, false);
+        emit('isSelect', props.messageData, false);
     }
 }
 
@@ -171,7 +171,6 @@ onUnmounted(() => {
     align-items: center;
     width: 100%;
     height: max-content;
-    /* background-color: rgba(0,0,0, .4); */
     padding: 5px 15px;
     margin-top: 1px;
 }

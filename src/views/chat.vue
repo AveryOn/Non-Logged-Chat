@@ -23,6 +23,15 @@
             @delete-for-everyone="deleteMessages"
             ></askDeleteComp>
 
+            <!-- Окно для выбора чата куда отправлять пересланные сообщения -->
+            <askForwardedChatComp
+            :show="isShowChats"
+            :chats="chats"
+            @select-chat="selectChat"
+            @close="isShowChats = false"
+            >
+            </askForwardedChatComp>
+
             <!-- IF NO SELECT CHAT -->
             <div class="if-no-select-chat" v-show="!selectedChat.chatID">
                 <h1 class="if-no-select-chat__text">
@@ -47,6 +56,7 @@
                 <!-- ITEMS CHAT -->
                 <itemChatComp
                 v-for="chat in chats"
+                v-if="isShowPanelChats"
                 :chat-data="chat"
                 :key="chat.id"
                 @select-chat="selectChat"
@@ -74,6 +84,7 @@
             <toolsBarComp 
             :show="selectedMessages.length > 0"
             @delete-messages="isAskDelete = true"
+            @forward-messages="forwardMessages"
             >
             </toolsBarComp>
 
@@ -99,13 +110,24 @@
                 >
                     {{ message?.text }}
                 </itemMessageComp>
+                <!-- Ответ на сообщение -->
                 <fillReplyMessageComp
                 v-if="selectedReplyMessage.replyToID"
                 :content="selectedReplyMessage.replyToContent"
                 :username="selectedChat.username"
+                :is-forward-messages="isForwardMessages"
+                :forwarded-messages-count="forwardedMessages.length"
                 @cancel-reply="cancelReplyMessage"
                 >
-                </fillReplyMessageComp>
+                </fillReplyMessageComp
+                >
+                <!-- Блок отображает сколько выбрано сообщений для пересылки -->
+                <fillForwardedMessagesComp
+                v-else
+                :forwarded-messages-count="forwardedMessages.length"
+                v-show="isForwardMessages && forwardedMessages.length"
+                >
+                </fillForwardedMessagesComp>
             </div>
 
             <!-- INPUT -->
@@ -135,18 +157,21 @@
 <script setup>
 import toolsBarComp from '@/components/toolsBarComp.vue';
 import askDeleteComp from '@/components/askDeleteComp.vue';
+import askForwardedChatComp from '@/components/askForwardedChatComp.vue';
 import inputComp from '@/components/inputComp.vue';
 import buttonComp from '@/components/buttonComp.vue';
 import myIconComp from '@/components/myIconComp.vue';
 import itemChatComp from '@/components/itemChatComp.vue';
 import itemMessageComp from '@/components/itemMessageComp.vue';
 import fillReplyMessageComp from '@/components/fillReplyMessageComp.vue';
+import fillForwardedMessagesComp from '@/components/fillForwardedMessagesComp.vue';
 import userWrapperComp from '@/components/userWrapperComp.vue';
 import userPage from '@/components/userPage.vue';
 import notifyComp from '@/components/notifyComp.vue';
 import logComp from '@/components/logComp.vue';
 import { userActions, socket } from '@/socket/socket-config'
 import LazyLoadingModule from '@/tools/lazyloading';
+import { draftStorageUpdate } from '@/tools/draftStorage';
 import { ref, reactive, watch, onMounted, computed } from 'vue';
 import { useStore } from 'vuex';
 const store = useStore();
@@ -156,7 +181,10 @@ const isShowUserPage = ref(false);
 const isShowTriggerMessages = ref(false);
 const isShowNotifyNewMessage = ref(false);
 const isAskDelete = ref(false);
-const isFindMessage = ref(false);
+// Проверка временем
+// const isFindMessage = ref(false);
+const isShowChats = ref(false);
+const isForwardMessages = ref(false);
 const userWriteMessage = {
     isStop: ref(false),
     isShow: ref(false),
@@ -168,6 +196,7 @@ const selectedChat = ref({ chatID: null, username: null, userID: null });
 const selectedMessages = ref([]);
 const selectedReplyMessage = ref({ replyToID: null, replyToContent: null })
 const userCurrentPage = reactive({username: '', friends: [], color: ''});
+const forwardedMessages = ref([]);
 const messages = ref([]);
 const users = ref([]);
 const chats = ref([]);
@@ -221,13 +250,18 @@ function addUser(user){
     }
 }
 
-function selectMessage(messageID, isSelect){
+// Заполняет массивы selectedMessages и forwardedMessages
+function selectMessage(message, isSelect){
     if(isSelect){
-        if(!selectedMessages.value.includes(messageID)){
-            selectedMessages.value.push(messageID);
+        if(!selectedMessages.value.includes(message.id)){
+            selectedMessages.value.push(message.id);
+            if(!forwardedMessages.value.includes(message)){
+                forwardedMessages.value.push(message);
+            }
         }
     } else {
-        selectedMessages.value.splice(selectedMessages.value.indexOf(messageID), 1);
+        selectedMessages.value.splice(selectedMessages.value.indexOf(message.id), 1);
+        forwardedMessages.value.splice(forwardedMessages.value.indexOf(message.id), 1);
     }
 }
 
@@ -309,8 +343,11 @@ function cancelReplyMessage() {
     }
 }
 
+// Выбор чата
 function selectChat(chat){
     const myID = JSON.parse(localStorage.getItem('auth')).id;
+    const draftStorage = JSON.parse(localStorage.getItem('draft'))[chat.chatID]
+    messageText.value = draftStorage.messageText;
     store.dispatch('getMessages', { chatID: chat.chatID, userID: myID, limit: 15 })
         .then(response => {
             messages.value = response.messages;
@@ -323,8 +360,17 @@ function selectChat(chat){
                     behavior: "smooth",
                 });
                 isShowTriggerMessages.value = true;
+                // console.log(messages.value);
+
+                // Пересылка сообщений
+                // if(isShowChats.value) {
+                //     if(forwardedMessages.value.length){
+                //         isForwardMessages.value = true;
+                //     }
+                // }
+                console.log(forwardedMessages.value.length);
+                selectedMessages.value = [];
             }, 0)
-            messageText.value = '';
         })
     selectedChat.value = chat;
     isShowPanelChats.value = false;
@@ -360,14 +406,15 @@ async function observeTriggerMessage(entries){
     }
 }
 
-function addLog(typeLog, message){
-    store.commit('addLog', { typeLog, message })
-}
+// Проверка временем
+// function addLog(typeLog, message){
+//     store.commit('addLog', { typeLog, message })
+// }
 
 // Отправка сообщения другому пользователю
 function sendMessage(){
     // Обычная отправка сообщения
-    if(!selectedReplyMessage.value.replyToID){
+    if(!selectedReplyMessage.value.replyToID && !forwardedMessages.value.length) {
         userActions.createMessage({ 
             isReply: false,
             fromUsername: JSON.parse(localStorage.getItem('auth')).username,
@@ -378,7 +425,7 @@ function sendMessage(){
         })
     }
     // Отправка сообщения с ответом на выбранное сообщение (reply-сообщение)
-    else if(selectedReplyMessage.value.replyToID){
+    else if(selectedReplyMessage.value.replyToID && !forwardedMessages.value.length) {
         userActions.createReplyMessage({ 
             isReply: true,
             fromUsername: JSON.parse(localStorage.getItem('auth')).username,
@@ -390,11 +437,26 @@ function sendMessage(){
             chatID: selectedChat.value.chatID,
         })
     }
+    // Отправка сообщения, содержащее коллекцию сообщений для пересылки другому чату
+    else if (forwardedMessages.value.length) {
+        userActions.createForwardedMessage({ 
+            isReply: (selectedReplyMessage.value.replyToID)? true : false,
+            fromUsername: JSON.parse(localStorage.getItem('auth')).username,
+            text: messageText.value,
+            fromUserID: JSON.parse(localStorage.getItem('auth')).id,
+            toUserID: selectedChat.value?.userID,
+            replyToID: selectedReplyMessage.value.replyToID,
+            replyToContent: selectedReplyMessage.value.replyToContent,
+            forwardedMessages: forwardedMessages.value,
+            chatID: selectedChat.value.chatID,
+        })
+    }
     // Принудительная остановка lazyloading
     userWriteMessage.isStop.value = true;
     if(selectedReplyMessage.value.replyToID){
         cancelReplyMessage();
     }
+    draftStorageUpdate(selectedChat.value.chatID, 0);
 }
 
 // Удаление выбранных собщений
@@ -417,6 +479,11 @@ function deleteMessages(isAllUsers){
             toUserID
         })
     }
+}
+
+// 
+function forwardMessages(){
+    isShowChats.value = true;
 }
 
 const mountedMessages = ref([]);
@@ -459,6 +526,9 @@ onMounted(() => {
     store.dispatch('getUserChats', { userID: JSON.parse(localStorage.getItem('auth')).id })
         .then((data) => {
             chats.value = data;
+            data.forEach(chat => {
+                draftStorageUpdate(chat.chatID);
+            })
         })
     userActions.connectUser();
 
@@ -586,11 +656,15 @@ onMounted(() => {
     // Отображать другому пользователю, что я печатаю сообщение
     const heartBeat = new LazyLoadingModule.LL_HeartBeat(1500);
     watch(messageText, (newValue) => {
+        console.log(newValue);
+        if(newValue !== '') draftStorageUpdate(selectedChat.value.chatID, messageText.value);
+        else draftStorageUpdate(selectedChat.value.chatID, 0);
         heartBeat.payload(newValue, userWriteMessage.isStop.value, (execute) => {
             // Принудительная остановка lazyloading
             if(execute === 0){
                 userWriteMessage.isStop.value = false;
             }
+            // Начало писанины
             if(execute){
                 socket.emit('write-message', { 
                     isWrite: execute, 
@@ -598,7 +672,10 @@ onMounted(() => {
                     fromUserID: myID,
                     toUserID: selectedChat.value.userID
                 });
+            // Конец писанины
             } else {
+                // Сохранение напсианного в черновик
+
                 socket.emit('write-message', { 
                     isWrite: execute, 
                     username: myUsername,

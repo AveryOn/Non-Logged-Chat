@@ -16,6 +16,7 @@ const props = defineProps({
         default: false
     }
 })
+defineEmits(['close']);
 
 </script>
 
@@ -41,6 +42,7 @@ const props = defineProps({
     align-items: center;
     justify-content: center;
     background-color: rgb(46, 53, 53);
+    box-shadow: 10px 5px 30px 2px rgba(0,0,0, .5);
     border-radius: 15px;
 }
 .ask-delete__title{
