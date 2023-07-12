@@ -115,8 +115,6 @@
                 v-if="selectedReplyMessage.replyToID"
                 :content="selectedReplyMessage.replyToContent"
                 :username="selectedChat.username"
-                :is-forward-messages="isForwardMessages"
-                :forwarded-messages-count="forwardedMessages.length"
                 @cancel-reply="cancelReplyMessage"
                 >
                 </fillReplyMessageComp
@@ -126,6 +124,7 @@
                 v-else
                 :forwarded-messages-count="forwardedMessages.length"
                 v-show="isForwardMessages && forwardedMessages.length"
+                @cancel-forward="cancelForwardMessages"
                 >
                 </fillForwardedMessagesComp>
             </div>
@@ -255,9 +254,9 @@ function selectMessage(message, isSelect){
     if(isSelect){
         if(!selectedMessages.value.includes(message.id)){
             selectedMessages.value.push(message.id);
-            if(!forwardedMessages.value.includes(message)){
-                forwardedMessages.value.push(message);
-            }
+        }
+        if(!forwardedMessages.value.includes(message)){
+            forwardedMessages.value.push(message);
         }
     } else {
         selectedMessages.value.splice(selectedMessages.value.indexOf(message.id), 1);
@@ -267,17 +266,30 @@ function selectMessage(message, isSelect){
 
 // Добавляет данные reply-сообщения
 function selectReplyMessage(message){
+    // const draftStorage = JSON.parse(localStorage.getItem('draft'))[selectedChat.value.chatID];
     const blockMessages = document.querySelector('.block-messages');
     selectedReplyMessage.value = { 
         replyToID: message.id,
         replyToContent: message.text  
     }
+    // Если в черновике сохранены пересланные сообщения, то очищать их
+    draftStorageUpdate(selectedChat.value.chatID, null, selectedReplyMessage.value, 0, 0);
+
     setTimeout(() => {
         blockMessages.scroll({
             top: blockMessages.scrollHeight,
             behavior: "smooth",
         });
     }, 0)
+}
+
+// Отменяет выделение reply-сообщения
+function cancelReplyMessage() {
+    draftStorageUpdate(selectedChat.value.chatID, null, 0, null, null);
+    selectedReplyMessage.value = { 
+        replyToID: null,
+        replyToContent: null  
+    }
 }
 
 // Поиск сообщения по его ссылке в reply-сообщении
@@ -335,19 +347,21 @@ function findMessage(replyToID){
     }
 }
 
-// Отменяет выделение reply-сообщения
-function cancelReplyMessage() {
-    selectedReplyMessage.value = { 
-        replyToID: null,
-        replyToContent: null  
-    }
-}
-
 // Выбор чата
-function selectChat(chat){
+function selectChat(chat, isForward){
+    if(!isForward){
+        const draftStorage = JSON.parse(localStorage.getItem('draft'))[chat.chatID];
+        messageText.value = draftStorage.messageText;
+        forwardedMessages.value = draftStorage.forwardedMessages;
+        isForwardMessages.value = draftStorage.isForwardMessages;
+        selectedReplyMessage.value = draftStorage.replyMessage;
+    } 
+    else {
+        isForwardMessages.value = true;
+        draftStorageUpdate(chat.chatID, null, 0, true, forwardedMessages.value);
+    }
+    selectedMessages.value = [];
     const myID = JSON.parse(localStorage.getItem('auth')).id;
-    const draftStorage = JSON.parse(localStorage.getItem('draft'))[chat.chatID]
-    messageText.value = draftStorage.messageText;
     store.dispatch('getMessages', { chatID: chat.chatID, userID: myID, limit: 15 })
         .then(response => {
             messages.value = response.messages;
@@ -360,16 +374,6 @@ function selectChat(chat){
                     behavior: "smooth",
                 });
                 isShowTriggerMessages.value = true;
-                // console.log(messages.value);
-
-                // Пересылка сообщений
-                // if(isShowChats.value) {
-                //     if(forwardedMessages.value.length){
-                //         isForwardMessages.value = true;
-                //     }
-                // }
-                console.log(forwardedMessages.value.length);
-                selectedMessages.value = [];
             }, 0)
         })
     selectedChat.value = chat;
@@ -482,8 +486,15 @@ function deleteMessages(isAllUsers){
 }
 
 // 
-function forwardMessages(){
+function forwardMessages() {
     isShowChats.value = true;
+}
+
+// Сброс массива пересылаемых сообщений
+function cancelForwardMessages() {
+    isForwardMessages.value = false;
+    forwardedMessages.value = [];
+    draftStorageUpdate(selectedChat.value.chatID, null, null, 0, 0);
 }
 
 const mountedMessages = ref([]);
@@ -656,9 +667,10 @@ onMounted(() => {
     // Отображать другому пользователю, что я печатаю сообщение
     const heartBeat = new LazyLoadingModule.LL_HeartBeat(1500);
     watch(messageText, (newValue) => {
-        console.log(newValue);
-        if(newValue !== '') draftStorageUpdate(selectedChat.value.chatID, messageText.value);
+        // запись в черновик
+        if(newValue !== '') draftStorageUpdate(selectedChat.value.chatID, messageText.value, null, null, null);
         else draftStorageUpdate(selectedChat.value.chatID, 0);
+
         heartBeat.payload(newValue, userWriteMessage.isStop.value, (execute) => {
             // Принудительная остановка lazyloading
             if(execute === 0){

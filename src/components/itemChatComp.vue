@@ -14,7 +14,14 @@
             
             <div class="item-chat__draft" v-show="draft.draftEnable">
                 <p class="item-chat__draft-title">Draft:</p>
-                <p class="item-chat__draft-value" v-if="draft.draftType === 'text'">{{ draft.draftValue }}</p>
+
+                <p class="item-chat__draft-value" v-if="draft.draftType === 'text'">
+                    {{ draft.draftValue }}
+                </p>
+
+                <p class="item-chat__draft-value" v-else-if="draft.draftType === 'forward'">
+                    {{ draft.draftValue }} forwarded messages
+                </p>
             </div>
         </div>
     </div>
@@ -22,6 +29,7 @@
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue';
+import { draftStorageUpdate } from '@/tools/draftStorage';
 const props = defineProps({
     chatData: {
         type: Object,
@@ -40,7 +48,7 @@ function selectChat(){
         chatID: +props.chatData.chatID, 
         username: props.chatData.username, 
         userID: +props.chatData.userID ,
-    })
+    }, false)
 }
 
 // Вычисляет текст который будет отображаться в поле последнего сообщения в текущем чате
@@ -70,11 +78,24 @@ const computedReadableMessage = computed(() => {
 
 onMounted(() => {
     const draftStorage = JSON.parse(localStorage.getItem('draft'))[props.chatData.chatID]
-    if(draftStorage.isForwardMessages === false && draftStorage.messageText) {
+    // Если в черновике только данные о переслаемых сообщениях
+    if (
+        draftStorage.isForwardMessages === true && 
+        draftStorage.forwardedMessages.length && 
+        !draftStorage.messageText
+    ) {
+        draft.value.draftEnable = true;
+        draft.value.draftType = 'forward';
+        draft.value.draftValue = draftStorage.forwardedMessages.length;
+    }
+    // Если в черновике только текстовое сообщение
+    else if (draftStorage.messageText) {
         draft.value.draftEnable = true;
         draft.value.draftType = 'text';
         draft.value.draftValue = draftStorage.messageText;
-    } 
+    }
+
+
 })
 
 </script>

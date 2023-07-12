@@ -28,7 +28,7 @@ const props = defineProps({
 const emit = defineEmits(['close', 'selectChat']);
 
 function selectChat(chat){
-    emit('selectChat', chat);
+    emit('selectChat', chat, true);
     emit('close', false);
 }
 

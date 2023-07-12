@@ -15,11 +15,15 @@ function draftStorageUpdate(chatID, messageText, replyMessage, isForwardMessages
             forwardedMessages: [],
         }
         localStorage.setItem('draft', JSON.stringify(draft));
+        return;
     }
-    if (chatID && draft[chatID]) {
+    else if (chatID && draft[chatID]) {
         if (messageText) {
             draft[chatID].messageText = messageText;
-        } else if (messageText === 0) draft[chatID].messageText = null;
+        }
+        else if (messageText === 0) {
+            draft[chatID].messageText = null;
+        }
 
         if (replyMessage && replyMessage.replyToID) {
             draft[chatID].replyMessage.replyToID = replyMessage.replyToID;
@@ -39,14 +43,21 @@ function draftStorageUpdate(chatID, messageText, replyMessage, isForwardMessages
 
         if (isForwardMessages === true || isForwardMessages === false) {
             draft[chatID].isForwardMessages = isForwardMessages;
-        } else if (isForwardMessages === 0) draft[chatID].isForwardMessages = false;
+        }
+        else if (isForwardMessages === 0) {
+            draft[chatID].isForwardMessages = false;
+        }
 
         if (forwardedMessages && forwardedMessages.length) {
             draft[chatID].forwardedMessages = forwardedMessages;
-        } else if (forwardedMessages === 0) draft[chatID].forwardedMessages = [];
+        }
+        else if (forwardedMessages === 0) {
+            draft[chatID].forwardedMessages = [];
+        }
 
         localStorage.setItem('draft', JSON.stringify(draft));
     }
+    
 }
 
 export {
